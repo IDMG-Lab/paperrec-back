@@ -15,7 +15,6 @@ from fastapi.templating import Jinja2Templates
 from tortoise.exceptions import OperationalError, DoesNotExist, IntegrityError, ValidationError
 from fastapi.openapi.docs import (get_redoc_html, get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html)
 from fastapi.openapi.utils import get_openapi
-
 from core.Router import router
 
 application = FastAPI(
