@@ -25,9 +25,15 @@
     <filter-actions connection-id="5b35c674-83b5-42cd-84f6-c57c4d2e4238" dataset="arxivdb.papers" active-filter-id="" />
     <filter-actions connection-id="5b35c674-83b5-42cd-84f6-c57c4d2e4238" dataset="arxivdb.user" active-filter-id="" />
   </component>
+  <component name="DBNavigator.Project.ExecutionManager">
+    <retain-sticky-names value="false" />
+  </component>
   <component name="DBNavigator.Project.ObjectQuickFilterManager">
     <last-used-operator value="EQUAL" />
     <filters />
+  </component>
+  <component name="DBNavigator.Project.ParserDiagnosticsManager">
+    <diagnostics-history />
   </component>
   <component name="DBNavigator.Project.Settings">
     <connections>
