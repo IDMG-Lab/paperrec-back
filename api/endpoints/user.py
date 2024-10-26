@@ -5,7 +5,7 @@
 import os
 import time
 from api.endpoints.common import write_access_log
-from api.extends.sms import check_code
+# from api.extends.sms import check_code
 from core.Response import success, fail, res_antd
 from models.arxivdb import User, Role, Access, AccessLog
 from schemas import user
@@ -194,20 +194,20 @@ async def account_login(req: Request, post: user.AccountLogin):
     :param post:
     :return: jwt token
     """
-    if post.mobile and post.captcha:
-        # 手机号登陆
-        is_check = await check_code(req, post.captcha, post.mobile)
-        if not is_check:
-            return fail(msg="验证码无效, 登陆失败, 请重新登陆!")
-        mobile_user = await User.get_or_none(user_phone=post.mobile)
-        jwt_data = {
-            "user_id": mobile_user.pk,
-            "user_type": mobile_user.user_type
-        }
-        jwt_token = create_access_token(data=jwt_data)
-        data = {"token": jwt_token, "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60}
-        await write_access_log(req, mobile_user.pk, "通过手机号登陆了系统!")
-        return success(msg="登陆成功😄", data=data)
+    # if post.mobile and post.captcha:
+    #     # 手机号登陆
+    #     is_check = await check_code(req, post.captcha, post.mobile)
+    #     if not is_check:
+    #         return fail(msg="验证码无效, 登陆失败, 请重新登陆!")
+    #     mobile_user = await User.get_or_none(user_phone=post.mobile)
+    #     jwt_data = {
+    #         "user_id": mobile_user.pk,
+    #         "user_type": mobile_user.user_type
+    #     }
+    #     jwt_token = create_access_token(data=jwt_data)
+    #     data = {"token": jwt_token, "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60}
+    #     await write_access_log(req, mobile_user.pk, "通过手机号登陆了系统!")
+    #     return success(msg="登陆成功😄", data=data)
 
     if post.username and post.password:
         # 账号密码登陆
@@ -257,19 +257,19 @@ async def update_user_info(req: Request, post: UpdateUserInfo):
     return success(msg="更新成功!")
 
 
-@router.put("/modify/mobile", dependencies=[Security(check_permissions)], summary="用户手机号修改")
-async def update_user_info(req: Request, post: ModifyMobile):
-    """
-    修改绑定手机号
-    :param req:
-    :param post:
-    :return:
-    """
-    is_check = await check_code(req, post.captcha, post.mobile)
-    if not is_check:
-        return fail(msg="无效验证码或验证已过期!")
-    await User.filter(id=req.state.user_id).update(user_phone=post.mobile)
-    return success(msg="手机号修改成功,登陆请用新绑定的手机号码!")
+# @router.put("/modify/mobile", dependencies=[Security(check_permissions)], summary="用户手机号修改")
+# async def update_user_info(req: Request, post: ModifyMobile):
+#     """
+#     修改绑定手机号
+#     :param req:
+#     :param post:
+#     :return:
+#     """
+#     is_check = await check_code(req, post.captcha, post.mobile)
+#     if not is_check:
+#         return fail(msg="无效验证码或验证已过期!")
+#     await User.filter(id=req.state.user_id).update(user_phone=post.mobile)
+#     return success(msg="手机号修改成功,登陆请用新绑定的手机号码!")
 
 
 @router.put("/avatar/upload", dependencies=[Security(check_permissions)], summary="头像修改")

@@ -11,7 +11,7 @@ from schemas.base import BaseResp, ResAntTable
 class CreateUser(BaseModel):
     username: str = Field(min_length=3, max_length=10)
     password: str = Field(min_length=6, max_length=12)
-    user_phone: Optional[str] = Field(regex="^1[34567890]\\d{9}$")
+    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$")
     user_status: Optional[bool]
     remarks: Optional[str]
     roles: Optional[List[int]]
@@ -21,7 +21,7 @@ class UpdateUser(BaseModel):
     id: int
     username: Optional[str] = Field(min_length=3, max_length=10)
     password: Optional[str] = Field(min_length=6, max_length=12)
-    user_phone: Optional[str] = Field(regex="^1[34567890]\\d{9}$")
+    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$")
     user_status: Optional[bool]
     remarks: Optional[str]
 
@@ -34,12 +34,12 @@ class SetRole(BaseModel):
 class AccountLogin(BaseModel):
     username: Optional[str] = Field(min_length=3, max_length=10, description="用户名")
     password: Optional[str] = Field(min_length=6, max_length=12, description="密码")
-    mobile: Optional[str] = Field(regex="^1[34567890]\\d{9}$", description="手机号")
+    mobile: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号")
     captcha: Optional[str] = Field(min_length=6, max_length=6, description="6位验证码")
 
 
 class ModifyMobile(BaseModel):
-    mobile: str = Field(regex="^1[34567890]\\d{9}$", description="手机号")
+    mobile: str = Field(pattern="^1[34567890]\\d{9}$", description="手机号")
     captcha: str = Field(min_length=6, max_length=6, description="6位验证码")
 
 
@@ -96,7 +96,7 @@ class UpdateUserInfo(BaseModel):
     nickname: Optional[str]
     user_email: Optional[str]
     header_img: Optional[str]
-    user_phone: Optional[str] = Field(regex="^1[34567890]\\d{9}$", description="手机号")
+    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号")
     password: Optional[str] = Field(min_length=6, max_length=12, description="密码")
 
     @validator('*')
