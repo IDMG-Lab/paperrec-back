@@ -3,19 +3,21 @@
 @Des: views home
 """
 
-from fastapi import Request, Form, Cookie
+from fastapi import Request, Form, APIRouter
 from models.arxivdb import User
-from typing import Optional
+from fastapi.responses import HTMLResponse
+
+router = APIRouter()
 
 
-async def home(request: Request, session_id: Optional[str] = Cookie(None)):
-    cookie = session_id
-    session = request.session.get("session")
-    page_data = {
-        "cookie": cookie,
-        "session": session
-    }
-    return request.app.state.views.TemplateResponse("index.html", {"request": request, **page_data})
+@router.get("/", tags=["门户首页"], response_class=HTMLResponse)
+async def home(request: Request):
+    """
+    门户首页
+    :param request:
+    :return:
+    """
+    return request.app.state.views.TemplateResponse("index.html", {"request": request})
 
 
 async def reg_page(req: Request):

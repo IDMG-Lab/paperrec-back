@@ -3,7 +3,7 @@
 @Des: schemas模型
 """
 from datetime import datetime
-from pydantic import Field, BaseModel, validator
+from pydantic import Field, BaseModel, field_validator
 from typing import Optional, List
 from schemas.base import BaseResp, ResAntTable
 
@@ -11,19 +11,19 @@ from schemas.base import BaseResp, ResAntTable
 class CreateUser(BaseModel):
     username: str = Field(min_length=3, max_length=10)
     password: str = Field(min_length=6, max_length=12)
-    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$")
-    user_status: Optional[bool]
-    remarks: Optional[str]
-    roles: Optional[List[int]]
+    user_phone: Optional[str] = Field(default=None, pattern="^1[34567890]\\d{9}$")
+    user_status: Optional[bool] = None
+    remarks: Optional[str] = None
+    roles: Optional[List[int]] = None
 
 
 class UpdateUser(BaseModel):
     id: int
-    username: Optional[str] = Field(min_length=3, max_length=10)
-    password: Optional[str] = Field(min_length=6, max_length=12)
-    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$")
-    user_status: Optional[bool]
-    remarks: Optional[str]
+    username: Optional[str] = Field(default=None, min_length=3, max_length=10)
+    password: Optional[str] = Field(default=None, min_length=6, max_length=12)
+    user_phone: Optional[str] = Field(default=None, pattern="^1[34567890]\\d{9}$")
+    user_status: Optional[bool] = None
+    remarks: Optional[str] = None
 
 
 class SetRole(BaseModel):
@@ -32,10 +32,10 @@ class SetRole(BaseModel):
 
 
 class AccountLogin(BaseModel):
-    username: Optional[str] = Field(min_length=3, max_length=10, description="用户名")
-    password: Optional[str] = Field(min_length=6, max_length=12, description="密码")
-    mobile: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号")
-    captcha: Optional[str] = Field(min_length=6, max_length=6, description="6位验证码")
+    username: Optional[str] = Field(min_length=3, max_length=10, description="用户名", default=None)
+    password: Optional[str] = Field(min_length=6, max_length=12, description="密码", default=None)
+    mobile: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号", default=None)
+    captcha: Optional[str] = Field(min_length=6, max_length=6, description="6位验证码", default=None)
 
 
 class ModifyMobile(BaseModel):
@@ -45,15 +45,15 @@ class ModifyMobile(BaseModel):
 
 class UserInfo(BaseModel):
     username: str
-    age: Optional[int]
+    age: Optional[int] = None
     user_type: bool
-    nickname: Optional[str]
-    user_phone: Optional[str]
-    user_email: Optional[str]
-    full_name: Optional[str]
-    scopes: Optional[List[str]]
+    nickname: Optional[str] = None
+    user_phone: Optional[str] = None
+    user_email: Optional[str] = None
+    full_name: Optional[str] = None
+    scopes: Optional[List[str]] = None
     user_status: bool
-    header_img: Optional[str]
+    header_img: Optional[str] = None
     sex: int
 
 
@@ -61,16 +61,16 @@ class UserListItem(BaseModel):
     key: int
     id: int
     username: str
-    age: Optional[int]
+    age: Optional[int] = None
     user_type: bool
-    nickname: Optional[str]
-    user_phone: Optional[str]
-    user_email: Optional[str]
-    full_name: Optional[str]
+    nickname: Optional[str] = None
+    user_phone: Optional[str] = None
+    user_email: Optional[str] = None
+    full_name: Optional[str] = None
     user_status: bool
-    header_img: Optional[str]
+    header_img: Optional[str] = None
     sex: int
-    remarks: Optional[str]
+    remarks: Optional[str] = None
     create_time: datetime
     update_time: datetime
 
@@ -80,8 +80,8 @@ class CurrentUser(BaseResp):
 
 
 class AccessToken(BaseModel):
-    token: Optional[str]
-    expires_in: Optional[int]
+    token: Optional[str] = None
+    expires_in: Optional[int] = None
 
 
 class UserLogin(BaseResp):
@@ -93,13 +93,13 @@ class UserListData(ResAntTable):
 
 
 class UpdateUserInfo(BaseModel):
-    nickname: Optional[str]
-    user_email: Optional[str]
-    header_img: Optional[str]
-    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号")
-    password: Optional[str] = Field(min_length=6, max_length=12, description="密码")
+    nickname: Optional[str] = None
+    user_email: Optional[str] = None
+    header_img: Optional[str] = None
+    user_phone: Optional[str] = Field(pattern="^1[34567890]\\d{9}$", description="手机号", default=None)
+    password: Optional[str] = Field(min_length=6, max_length=12, description="密码", default=None)
 
-    @validator('*')
+    @field_validator('*', mode='before')
     def blank_strings(cls, v):
         if v == "":
             return None

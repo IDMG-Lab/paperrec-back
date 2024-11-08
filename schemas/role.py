@@ -11,22 +11,22 @@ from datetime import datetime
 class CreateRole(BaseModel):
     role_name: str = Field(min_length=3, max_length=10)
     role_status: Optional[bool] = False
-    role_desc: Optional[str] = Field(max_length=255)
+    role_desc: Optional[str] = Field(default=None, max_length=255)
 
 
 class UpdateRole(BaseModel):
     id: int
     role_name: str
-    role_status: Optional[bool]
-    role_desc: Optional[str]
+    role_status: Optional[bool] = False
+    role_desc: Optional[str] = None
 
 
 class RoleItem(BaseModel):
     id: int
     key: int
     role_name: str
-    role_status: Optional[bool]
-    role_desc: Optional[str]
+    role_status: Optional[bool] = False
+    role_desc: Optional[str] = None
     create_time: datetime
     update_time: datetime
 

@@ -19,16 +19,16 @@ class ResAntTable(BaseModel):
 
 
 class WebsocketMessage(BaseModel):
-    action: Optional[str]
-    user: Optional[int]
-    data: Optional[Any]
+    action: Optional[str] = None
+    user: Optional[int] = None
+    data: Optional[Any] = None
 
 
 class WechatOAuthData(BaseModel):
     access_token: str
     expires_in: int
     refresh_token: str
-    unionid: Optional[str]
+    unionid: Optional[str] = None
     scope: str
     openid: str
 
@@ -41,4 +41,4 @@ class WechatUserInfo(BaseModel):
     province: str
     country: str
     headimgurl: str
-    unionid: Optional[str]
+    unionid: Optional[str] = None
