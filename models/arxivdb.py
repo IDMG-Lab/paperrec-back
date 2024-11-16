@@ -35,6 +35,8 @@ class UserWechat(TimestampMixin):
 class User(TimestampMixin):
     role: fields.ManyToManyRelation["Role"] = \
         fields.ManyToManyField("arxivdb.Role", related_name="user", on_delete=fields.CASCADE)
+    tag: fields.ManyToManyRelation["Tag"] = \
+        fields.ManyToManyField("arxivdb.Tag", related_name="user", on_delete=fields.CASCADE)
     username = fields.CharField(null=True, max_length=20, description="用户名")
     user_type = fields.BooleanField(default=False, description="用户类型 True:超级管理员 False:普通管理员")
     password = fields.CharField(null=True, max_length=255)
@@ -47,11 +49,22 @@ class User(TimestampMixin):
     sex = fields.IntField(default=0, null=True, description='0未知 1男 2女')
     remarks = fields.CharField(null=True, max_length=30, description="备注")
     client_host = fields.CharField(null=True, max_length=19, description="访问IP")
+    has_selected_tags = fields.BooleanField(default=False, description="是否已选择标签")
     wechat: fields.OneToOneRelation[UserWechat]
 
     class Meta:
         table_description = "用户表"
         table = "user"
+
+
+class Tag(TimestampMixin):
+    user: fields.ManyToManyRelation[User]
+    id = fields.IntField(pk=True)
+    name = fields.CharField(max_length=255, unique=True, description="标签名称")
+
+    class Meta:
+        table_description = "标签表"
+        table = "tag"
 
 
 class Role(TimestampMixin):

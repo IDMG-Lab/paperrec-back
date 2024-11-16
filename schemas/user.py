@@ -15,6 +15,7 @@ class CreateUser(BaseModel):
     user_status: Optional[bool] = None
     remarks: Optional[str] = None
     roles: Optional[List[int]] = None
+    tags: Optional[List[int]] = None
 
 
 class UpdateUser(BaseModel):
@@ -24,11 +25,17 @@ class UpdateUser(BaseModel):
     user_phone: Optional[str] = Field(default=None, pattern="^1[34567890]\\d{9}$")
     user_status: Optional[bool] = None
     remarks: Optional[str] = None
+    tags: Optional[List[int]] = None
 
 
 class SetRole(BaseModel):
     user_id: int
-    roles: Optional[List[int]] = Field(default=[], description="角色")
+    roles: Optional[List[int]] = Field(default=None, description="角色")
+
+
+class SelectTags(BaseModel):
+    user_id: int
+    tags: Optional[List[int]] = Field(default=None, description="标签")
 
 
 class AccountLogin(BaseModel):
@@ -55,6 +62,7 @@ class UserInfo(BaseModel):
     user_status: bool
     header_img: Optional[str] = None
     sex: int
+    tags: Optional[List[int]] = None
 
 
 class UserListItem(BaseModel):
@@ -71,6 +79,7 @@ class UserListItem(BaseModel):
     header_img: Optional[str] = None
     sex: int
     remarks: Optional[str] = None
+    tags: Optional[List[int]] = None
     create_time: datetime
     update_time: datetime
 

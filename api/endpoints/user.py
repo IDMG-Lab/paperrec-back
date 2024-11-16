@@ -7,7 +7,7 @@ import time
 from api.endpoints.common import write_access_log
 from api.extends.sms import check_code
 from core.Response import success, fail, res_antd
-from models.arxivdb import User, Role, Access, AccessLog
+from models.arxivdb import User, Role, Access, AccessLog, Tag
 from schemas import user
 from core.Utils import en_password, check_password, random_str
 from core.Auth import create_access_token, check_permissions
@@ -42,6 +42,10 @@ async def user_add(post: user.CreateUser):
         # 有分配角色
         roles = await Role.filter(id__in=post.roles, role_status=True)
         await create_user.role.add(*roles)
+    if post.tags:
+        # 有分配标签
+        tags = await Tag.filter(id__in=post.tags)
+        await create_user.tag.add(*tags)
     return success(msg=f"用户{create_user.username}创建成功")
 
 
@@ -109,6 +113,31 @@ async def set_role(post: user.SetRole):
         await user_obj.role.add(*roles)
 
     return success(msg="角色分配成功!")
+
+
+@router.post("/select/tags", summary="选择标签", dependencies=[Security(check_permissions)])
+async def select_tags(post: user.SelectTags):
+    """
+    用户选择标签
+    :param post:
+    :return:
+    """
+    user_obj = await User.get_or_none(pk=post.user_id)
+    if not user_obj:
+        return fail(msg="用户不存在!")
+
+    # 清空当前用户的所有标签
+    await user_obj.tag.clear()
+    # 添加新标签
+    if post.tags:
+        tags = await Tag.filter(id__in=post.tags).all()
+        # 添加标签
+        await user_obj.tag.add(*tags)
+
+    # 标记用户已选择标签
+    await User.filter(pk=post.user_id).update(has_selected_tags=True)
+
+    return success(msg="标签选择成功!")
 
 
 @router.get("",
@@ -207,6 +236,11 @@ async def account_login(req: Request, post: user.AccountLogin):
         jwt_token = create_access_token(data=jwt_data)
         data = {"token": jwt_token, "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60}
         await write_access_log(req, mobile_user.pk, "通过手机号登陆了系统!")
+        get_user = await User.get_or_none(username=post.username)
+        # 检查用户是否已经选择了标签
+        if not get_user.has_selected_tags:
+            # 如果用户没有选择过标签，返回提示信息
+            return success(msg="登录成功😄，请选择您的标签。", data=data)
         return success(msg="登陆成功😄", data=data)
 
     if post.username and post.password:
@@ -227,6 +261,10 @@ async def account_login(req: Request, post: user.AccountLogin):
         jwt_token = create_access_token(data=jwt_data)
         data = {"token": jwt_token, "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60}
         await write_access_log(req, get_user.pk, "通过用户名登陆了系统!")
+        # 检查用户是否已经选择了标签
+        if not get_user.has_selected_tags:
+            # 如果用户没有选择过标签，返回提示信息
+            return success(msg="登录成功😄，请选择您的标签。", data=data)
         return success(msg="登陆成功😄", data=data)
 
     return fail(msg="至少选择一种登陆方式!")
