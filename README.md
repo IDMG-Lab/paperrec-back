@@ -1,2 +1,2 @@
-# Paper-web
-This is an academic paper recommendation website
+# paperrec-back
+学术文献推荐系统后端
