@@ -4,10 +4,12 @@
 """
 import os
 import time
+from datetime import datetime
+
 from api.endpoints.common import write_access_log
 from api.extends.sms import check_code
 from core.Response import success, fail, res_antd
-from models.arxivdb import User, Role, Access, AccessLog, Tag
+from models.arxivdb import User, Role, Access, AccessLog, Tag, UserProfile
 from schemas import user
 from core.Utils import en_password, check_password, random_str
 from core.Auth import create_access_token, check_permissions
@@ -19,6 +21,36 @@ from tortoise.queryset import F
 from schemas.user import UpdateUserInfo, ModifyMobile
 
 router = APIRouter(prefix='/user')
+
+
+@router.post("/register", summary="用户注册")
+async def user_register(post: user.CreateUser):
+    """
+    用户注册接口，用户通过前端提交注册信息
+    :param post: 用户注册信息
+    :return: 注册结果
+    """
+    # 检查用户名是否已存在
+    existing_user = await User.get_or_none(username=post.username)
+    if existing_user:
+        return fail(msg=f"用户名 {post.username} 已被注册！")
+
+    # 检查手机号是否已注册
+    if post.user_phone:
+        existing_phone = await User.get_or_none(user_phone=post.user_phone)
+        if existing_phone:
+            return fail(msg=f"手机号 {post.user_phone} 已被注册！")
+
+    # 密码加密
+    post.password = en_password(post.password)
+
+    # 创建用户记录
+    create_user = await User.create(**post.dict())
+    if not create_user:
+        return fail(msg="注册失败，请稍后重试！")
+
+    # 返回成功结果
+    return success(msg="注册成功！", data={"user_id": create_user.id, "username": create_user.username})
 
 
 @router.post("", summary="用户添加", dependencies=[Security(check_permissions, scopes=["user_add"])])
@@ -136,6 +168,24 @@ async def select_tags(post: user.SelectTags):
 
     # 标记用户已选择标签
     await User.filter(pk=post.user_id).update(has_selected_tags=True)
+
+    # 获取当前用户的画像
+    user_profile = await UserProfile.get_or_none(user_id=post.user_id)
+    if not user_profile:
+        # 如果没有用户画像（可能是首次登录），创建一个默认的用户画像
+        user_profile = await UserProfile.create(
+            user_id=post.user_id,
+            preferences={},  # 初始为空，可以根据需求给一个默认值
+            last_updated=datetime.now()
+        )
+
+    # 更新用户的兴趣标签（如果有选择的标签）
+    if post.tags:
+        user_profile.preferences["preferred_tags"] = post.tags
+
+    # 更新最后一次更新时间
+    user_profile.last_updated = datetime.now()
+    await user_profile.save()
 
     return success(msg="标签选择成功!")
 

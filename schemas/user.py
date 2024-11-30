@@ -12,7 +12,7 @@ class CreateUser(BaseModel):
     username: str = Field(min_length=3, max_length=10)
     password: str = Field(min_length=6, max_length=12)
     user_phone: Optional[str] = Field(default=None, pattern="^1[34567890]\\d{9}$")
-    user_status: Optional[bool] = None
+    user_status: Optional[bool] = True
     remarks: Optional[str] = None
     roles: Optional[List[int]] = None
     tags: Optional[List[int]] = None

@@ -10,6 +10,8 @@ from fastapi.security.oauth2 import OAuth2PasswordBearer
 from jwt import PyJWTError
 from pydantic import ValidationError
 from starlette import status
+from starlette.status import HTTP_401_UNAUTHORIZED
+
 from config import settings
 from models.arxivdb import User, Access
 
@@ -122,3 +124,22 @@ async def check_permissions(req: Request, security_scopes: SecurityScopes, token
     req.state.user_id = user_id
     # 缓存用户类型
     req.state.user_type = user_type
+
+
+# 获取当前用户的信息
+def get_current_user(req: Request):
+    """
+    从请求中获取当前用户的信息（user_id 和 user_type）。
+    :param req: 请求对象
+    :return: 当前用户的信息字典
+    """
+    user_id = getattr(req.state, "user_id", None)
+    user_type = getattr(req.state, "user_type", None)
+
+    if user_id is None or user_type is None:
+        raise HTTPException(
+            status_code=HTTP_401_UNAUTHORIZED,
+            detail="无效的凭证或未认证用户"
+        )
+
+    return {"user_id": user_id, "user_type": user_type}
