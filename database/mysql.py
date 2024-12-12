@@ -14,23 +14,23 @@ DB_ORM_CONFIG = {
         "arxivdb": {
             'engine': 'tortoise.backends.mysql',
             "credentials": {
-                'host': os.getenv('BASE_HOST', '127.0.0.1'),
-                'user': os.getenv('BASE_USER', 'myuser'),
+                'host': os.getenv('BASE_HOST', '10.101.168.97'),
+                'user': os.getenv('BASE_USER', 'hudan'),
                 'password': os.getenv('BASE_PASSWORD', '123456'),
-                'port': int(os.getenv('BASE_PORT', 3306)),
+                'port': int(os.getenv('BASE_PORT', 3336)),
                 'database': os.getenv('BASE_DB', 'arxivdb'),
             }
         },
-        # "db2": {
-        #     'engine': 'tortoise.backends.mysql',
-        #     "credentials": {
-        #         'host': os.getenv('DB2_HOST', '127.0.0.1'),
-        #         'user': os.getenv('DB2_USER', 'root'),
-        #         'password': os.getenv('DB2_PASSWORD', '123456'),
-        #         'port': int(os.getenv('DB2_PORT', 3306)),
-        #         'database': os.getenv('DB2_DB', 'db2'),
-        #     }
-        # },
+        "scrape": {
+            'engine': 'tortoise.backends.mysql',
+            "credentials": {
+                'host': os.getenv('DB2_HOST', '10.101.168.97'),
+                'user': os.getenv('DB2_USER', 'hudan'),
+                'password': os.getenv('DB2_PASSWORD', '123456'),
+                'port': int(os.getenv('DB2_PORT', 3336)),
+                'database': os.getenv('DB2_DB', 'scrape'),
+            }
+        },
         # "db3": {
         #     'engine': 'tortoise.backends.mysql',
         #     "credentials": {
@@ -45,7 +45,7 @@ DB_ORM_CONFIG = {
     },
     "apps": {
         "arxivdb": {"models": ["models.arxivdb"], "default_connection": "arxivdb"},
-        # "db2": {"models": ["models.db2"], "default_connection": "db2"},
+        "scrape": {"models": ["models.scrape"], "default_connection": "scrape"},
         # "db3": {"models": ["models.db3"], "default_connection": "db3"}
     },
     'use_tz': False,

@@ -15,14 +15,13 @@ class TagBase(BaseModel):
 
 
 class PaperBase(BaseModel):
-    id: int
+    id: float
     title: str = Field(..., max_length=255, description="论文标题")
     abstract: Optional[str] = Field(None, description="论文摘要")
     authors: Optional[str] = Field(None, description="作者列表")
     published_date: Optional[datetime] = Field(None, description="发表日期")
     source: Optional[str] = Field(None, max_length=255, description="来源")
-    tags: Optional[List[TagBase]] = Field(None, description="关联标签")
-    popularity: Optional[int] = Field(None, description="论文热度")
+    tags: Optional[str] = Field(None, description="关联标签")
 
 
 class UserProfileSchema(BaseModel):

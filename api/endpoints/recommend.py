@@ -3,14 +3,15 @@
 @Des: 个性化推荐
 """
 from fastapi import APIRouter, HTTPException, Query, Depends, Security
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from datetime import datetime
 
 from tortoise.expressions import Q
 from core.Auth import get_current_user, check_permissions
 from core.Response import success
 from schemas.recommend import RecommendationResponse, UserProfileResponse, UserActionBase
-from models.arxivdb import Paper, UserAction, UserProfile
+from models.arxivdb import Paper, UserAction, UserProfile, Tag
+from models.scrape import Arxiv
 
 router = APIRouter(prefix="/personalized")
 
@@ -21,9 +22,9 @@ router = APIRouter(prefix="/personalized")
             dependencies=[Security(check_permissions)]
             )
 async def get_personalized_recommendations(
-    current_user: dict = Depends(get_current_user),
-    limit: int = Query(10, ge=1, le=50, description="返回的推荐数量"),
-    tag_id: Optional[int] = Query(None, description="根据标签筛选"),
+        current_user: dict = Depends(get_current_user),
+        limit: int = Query(10, ge=1, le=50, description="返回的推荐数量"),
+        tag_id: Optional[int] = Query(None, description="根据标签筛选"),
 ):
     """
     获取个性化推荐列表
@@ -37,29 +38,49 @@ async def get_personalized_recommendations(
     if not user_profile:
         raise HTTPException(status_code=404, detail="用户画像未找到，请记录用户行为")
 
+    # 获取用户偏好的标签
     preferences = user_profile.preferences
     preferred_tags = preferences.get("preferred_tags", [])
-    # 获取与用户标签相关的论文
-    query = Paper.filter(Q(tag__id__in=preferred_tags)).distinct()
+    if not preferred_tags:
+        raise HTTPException(status_code=400, detail="用户未设置任何偏好标签")
+
+    # 默认使用用户偏好的第一个标签 ID
+    tag_id_to_use = tag_id or preferred_tags[0]
+
+    # 从 Tag 表中获取标签名称
+    tag = await Tag.get_or_none(id=tag_id_to_use)
+    if not tag:
+        raise HTTPException(status_code=404, detail="标签不存在")
+    tag_name = tag.name  # 标签名称
+
+    # 查询匹配的论文
+    query = Arxiv.filter(Q(primary_subject__startswith=tag_name)).distinct()
 
     # 如果传入了 tag_id，进行标签筛选
     if tag_id:
-        query = query.filter(Q(tag__id=tag_id))
+        tag = await Tag.get_or_none(id=tag_id)
+        tag_name = tag.name
+        query = query.filter(Q(primary_subject__icontains=tag_name)).distinct()
 
-    papers = await query.order_by("-popularity").limit(limit).prefetch_related("tag")
-    recommendations = [
-        RecommendationResponse(
-            id=paper.id,
+    # 按时间降序获取推荐论文
+    papers = await query.order_by("-date").limit(limit)
+
+    # 构建推荐列表
+    recommendations = []
+    current_id = 1
+
+    for paper in papers:
+        recommendation = RecommendationResponse(
+            id=current_id,
             user_id=user_id,
             paper={
-                "id": paper.id,
+                "id": paper.arxiv_id,
                 "title": paper.title,
                 "abstract": paper.abstract,
                 "authors": paper.authors,
-                "published_date": paper.published_date,
-                "source": paper.source,
-                "tags": [{"id": t.id, "name": t.name, "popularity": t.popularity} for t in await paper.tag.all()],
-                "popularity": paper.popularity,
+                "published_date": paper.date,
+                "source": paper.pdf_url,
+                "tags": paper.primary_subject,
             },
             reason="匹配您的兴趣标签",
             recommendation_type="content_based",
@@ -68,8 +89,8 @@ async def get_personalized_recommendations(
             create_time=datetime.now(),
             update_time=datetime.now(),
         )
-        for paper in papers
-    ]
+        recommendations.append(recommendation)
+        current_id += 1
     return recommendations
 
 
@@ -169,24 +190,36 @@ async def get_popular_recommendations(limit: int = Query(10, ge=1, le=50, descri
     获取热门推荐
     :param limit: 热门数量
     """
-    papers = await Paper.all().order_by("-popularity").limit(limit).prefetch_related("tag")
+    # 获取所有标签名称
+    tags = await Tag.all()
+    tag_names = [tag.name for tag in tags]
+
+    # 查询符合标签的论文
+    query_filter = Q(primary_subject__startswith=tag_names[0])
+    for tag_name in tag_names[1:]:
+        query_filter |= Q(primary_subject__startswith=tag_name)
+
+    # 按时间降序排列
+    papers = await Arxiv.filter(query_filter).order_by("-date").limit(limit)
+
+    # 构建推荐列表
     recommendations = []
     current_id = 1
+
     for paper in papers:
         recommendation = RecommendationResponse(
             id=current_id,
             user_id=None,
             paper={
-                "id": paper.id,
+                "id": paper.arxiv_id,
                 "title": paper.title,
                 "abstract": paper.abstract,
                 "authors": paper.authors,
-                "published_date": paper.published_date,
-                "source": paper.source,
-                "tags": [{"id": t.id, "name": t.name, "popularity": t.popularity} for t in await paper.tag.all()],
-                "popularity": paper.popularity,
+                "published_date": paper.date,
+                "source": paper.pdf_url,
+                "tags": paper.primary_subject,
             },
-            reason="热门论文推荐",
+            reason="基于标签表生成的热门推荐",
             recommendation_type="popular",
             tags=None,
             algorithm_details=None,
@@ -195,4 +228,5 @@ async def get_popular_recommendations(limit: int = Query(10, ge=1, le=50, descri
         )
         recommendations.append(recommendation)
         current_id += 1
+
     return recommendations
