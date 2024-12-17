@@ -9,11 +9,51 @@ from datetime import datetime
 from tortoise.expressions import Q
 from core.Auth import get_current_user, check_permissions
 from core.Response import success
-from schemas.recommend import RecommendationResponse, UserProfileResponse, UserActionBase
+from schemas.recommend import RecommendationResponse, UserProfileResponse, UserActionBase, PaperBase
 from models.arxivdb import Paper, UserAction, UserProfile, Tag
 from models.scrape import Arxiv
 
 router = APIRouter(prefix="/personalized")
+
+
+@router.get("/search", summary="搜索论文", response_model=List[PaperBase])
+async def search_arxiv_papers(
+    query: str = Query(..., description="用户输入的搜索内容"),
+    limit: int = Query(10, ge=1, le=100, description="每页数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+):
+    """
+    搜索论文
+    :param query: 用户输入的搜索关键词或内容
+    :param limit: 每页数量
+    :param offset: 偏移量
+    :return: 搜索结果
+    """
+    # 搜索标题、摘要、作者和分类
+    papers = await Arxiv.filter(
+        Q(title__icontains=query) |
+        Q(abstract__icontains=query) |
+        Q(authors__icontains=query) |
+        Q(primary_subject__icontains=query) |
+        Q(subjects__icontains=query)
+    ).order_by("-date").offset(offset).limit(limit)
+
+    # 如果没有找到相关论文
+    if not papers:
+        raise HTTPException(status_code=404, detail="没有找到相关论文")
+
+    return [
+        PaperBase(
+            id=paper.arxiv_id,
+            title=paper.title,
+            authors=paper.authors,
+            abstract=paper.abstract,
+            published_date=paper.date,
+            source=paper.pdf_url,
+            tags=paper.primary_subject,
+        )
+        for paper in papers
+    ]
 
 
 @router.get("/recommendations",
@@ -114,6 +154,69 @@ async def record_user_action(action: UserActionBase, current_user: dict = Depend
     await update_user_profile(action, user_id)
 
     return success(msg="行为记录成功")
+
+
+@router.get("/user/actions", summary="获取用户行为历史", dependencies=[Security(check_permissions)])
+async def get_user_actions(
+    current_user: dict = Depends(get_current_user),
+    start_time: Optional[datetime] = Query(None, description="起始时间"),
+    end_time: Optional[datetime] = Query(None, description="结束时间"),
+    action_type: Optional[str] = Query(None, description="行为类型（如浏览、收藏、点赞）"),
+    page: int = Query(1, ge=1, description="页码，默认第 1 页"),
+    page_size: int = Query(10, ge=1, le=100, description="每页条数，默认 10 条"),
+):
+    """
+    获取用户行为历史记录
+    :param current_user: 当前登录用户信息
+    :param start_time: 行为记录的起始时间
+    :param end_time: 行为记录的结束时间
+    :param action_type: 行为类型过滤条件
+    :param page: 页码
+    :param page_size: 每页条数
+    """
+    user_id = current_user["user_id"]
+
+    # 构建查询条件
+    query = Q(user_id=user_id)
+    if start_time:
+        query &= Q(create_time__gte=start_time)
+    if end_time:
+        query &= Q(create_time__lte=end_time)
+    if action_type:
+        query &= Q(action_type=action_type)
+
+    # 获取分页数据
+    total_count = await UserAction.filter(query).count()
+    actions = (
+        await UserAction.filter(query)
+        .order_by("-create_time")
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+
+    if not actions:
+        raise HTTPException(status_code=404, detail="用户行为历史记录未找到")
+
+    # 格式化返回结果
+    actions_data = [
+        UserActionBase(
+            paper_id=action.paper_id,
+            action_type=action.action_type,
+            action_value=action.action_value,
+            extra_data=action.extra_data,
+            create_time=action.create_time,
+        )
+        for action in actions
+    ]
+
+    return success(
+        data={
+            "total_count": total_count,
+            "page": page,
+            "page_size": page_size,
+            "actions": actions_data,
+        }
+    )
 
 
 @router.get("/user/profile",

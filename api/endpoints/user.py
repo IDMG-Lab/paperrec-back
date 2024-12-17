@@ -12,8 +12,8 @@ from core.Response import success, fail, res_antd
 from models.arxivdb import User, Role, Access, AccessLog, Tag, UserProfile
 from schemas import user
 from core.Utils import en_password, check_password, random_str
-from core.Auth import create_access_token, check_permissions
-from fastapi import Request, Query, APIRouter, Security, File, UploadFile
+from core.Auth import create_access_token, check_permissions, get_current_user
+from fastapi import Request, Query, APIRouter, Security, File, UploadFile, Depends
 from config import settings
 
 from typing import List
@@ -147,35 +147,37 @@ async def set_role(post: user.SetRole):
     return success(msg="角色分配成功!")
 
 
-@router.post("/select/tags", summary="选择标签", dependencies=[Security(check_permissions)])
-async def select_tags(post: user.SelectTags):
+@router.post("/select/tags", summary="用户选择标签", dependencies=[Security(check_permissions)])
+async def select_tags(post: user.SelectTags, current_user: dict = Depends(get_current_user)):
     """
-    用户选择标签
-    :param post:
-    :return:
+    用户登录后选择标签
+    :param post: 选择的标签列表
+    :param current_user: 当前登录的用户
     """
-    user_obj = await User.get_or_none(pk=post.user_id)
+    # 获取当前登录用户的对象
+    user_id = current_user["user_id"]
+    user_obj = await User.get_or_none(pk=user_id)
     if not user_obj:
         return fail(msg="用户不存在!")
 
     # 清空当前用户的所有标签
     await user_obj.tag.clear()
+
     # 添加新标签
     if post.tags:
         tags = await Tag.filter(id__in=post.tags).all()
-        # 添加标签
         await user_obj.tag.add(*tags)
 
     # 标记用户已选择标签
-    await User.filter(pk=post.user_id).update(has_selected_tags=True)
+    await User.filter(pk=user_id).update(has_selected_tags=True)
 
     # 获取当前用户的画像
-    user_profile = await UserProfile.get_or_none(user_id=post.user_id)
+    user_profile = await UserProfile.get_or_none(user_id=user_id)
     if not user_profile:
-        # 如果没有用户画像（可能是首次登录），创建一个默认的用户画像
+        # 如果没有用户画像，创建默认的用户画像
         user_profile = await UserProfile.create(
-            user_id=post.user_id,
-            preferences={},  # 初始为空，可以根据需求给一个默认值
+            user_id=user_id,
+            preferences={},  # 初始为空，可根据需求添加默认值
             last_updated=datetime.now()
         )
 
@@ -341,7 +343,15 @@ async def update_user_info(req: Request, post: UpdateUserInfo):
     :param post:
     :return:
     """
-    await User.filter(id=req.state.user_id).update(**post.dict(exclude_none=True))
+    update_data = post.dict(exclude_none=True)
+
+    # 处理密码更新逻辑
+    if 'password' in update_data:
+        update_data['password'] = en_password(post.password)  # 密码加密
+
+    # 更新用户信息
+    await User.filter(id=req.state.user_id).update(**update_data)
+
     return success(msg="更新成功!")
 
 
