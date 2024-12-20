@@ -148,17 +148,15 @@ class TagWeight(TimestampMixin):
         table = "tag_weight"
 
 
-class PaperComment(TimestampMixin):
-    paper: fields.ForeignKeyRelation["Paper"] = \
-        fields.ForeignKeyField("arxivdb.Paper", related_name="comments", on_delete=fields.CASCADE)
+class PaperAnnotation(TimestampMixin):
     user: fields.ForeignKeyRelation["User"] = \
-        fields.ForeignKeyField("arxivdb.User", related_name="comments", on_delete=fields.CASCADE)
-    content = fields.TextField(description="评论内容")
-    rating = fields.FloatField(default=0.0, description="评分，0-5 分制")
+        fields.ForeignKeyField("arxivdb.User", related_name="annotations", on_delete=fields.CASCADE)
+    arxiv_id = fields.CharField(max_length=100, description="外部论文唯一标识符")
+    content = fields.TextField(description="标注内容")  # 用户标注的内容
 
     class Meta:
-        table_description = "论文评论表"
-        table = "paper_comment"
+        table_description = "论文标注表"
+        table = "paper_annotation"
 
 
 class UserNotification(TimestampMixin):
@@ -175,8 +173,7 @@ class UserNotification(TimestampMixin):
 class PaperFavorite(TimestampMixin):
     user: fields.ForeignKeyRelation["User"] = \
         fields.ForeignKeyField("arxivdb.User", related_name="favorites", on_delete=fields.CASCADE)
-    paper: fields.ForeignKeyRelation["Paper"] = \
-        fields.ForeignKeyField("arxivdb.Paper", related_name="favorites", on_delete=fields.CASCADE)
+    arxiv_id = fields.CharField(max_length=100, description="外部论文唯一标识符")
 
     class Meta:
         table_description = "论文收藏表"

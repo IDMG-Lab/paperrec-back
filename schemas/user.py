@@ -62,8 +62,7 @@ class UserInfo(BaseModel):
     user_status: bool
     header_img: Optional[str] = None
     sex: int
-    tags: Optional[List[int]] = None
-
+    tags: Optional[List[dict]] = None
 
 class UserListItem(BaseModel):
     key: int

@@ -2,7 +2,7 @@
 """
 @Des: 个性化推荐
 """
-from fastapi import APIRouter, HTTPException, Query, Depends, Security
+from fastapi import APIRouter, HTTPException, Query, Depends, Security, Body
 from typing import List, Optional
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from tortoise.expressions import Q
 from core.Auth import get_current_user, check_permissions
 from core.Response import success
 from schemas.recommend import RecommendationResponse, UserProfileResponse, UserActionBase, PaperBase
-from models.arxivdb import Paper, UserAction, UserProfile, Tag
+from models.arxivdb import Paper, UserAction, UserProfile, Tag, PaperFavorite, PaperAnnotation
 from models.scrape import Arxiv
 
 router = APIRouter(prefix="/personalized")
@@ -333,3 +333,175 @@ async def get_popular_recommendations(limit: int = Query(10, ge=1, le=50, descri
         current_id += 1
 
     return recommendations
+
+
+@router.post("/favorites", summary="收藏论文", dependencies=[Security(check_permissions)])
+async def add_favorite(
+    arxiv_id: str = Body(..., description="论文ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    收藏论文
+    :param arxiv_id: 外部论文ID
+    :param current_user: 当前用户信息
+    """
+    user_id = current_user["user_id"]
+
+    # 检查是否已经收藏过
+    existing_favorite = await PaperFavorite.get_or_none(user_id=user_id, arxiv_id=arxiv_id)
+    if existing_favorite:
+        raise HTTPException(status_code=400, detail="该论文已收藏")
+
+    # 添加收藏
+    await PaperFavorite.create(user_id=user_id, arxiv_id=arxiv_id)
+    return success(msg="论文收藏成功")
+
+
+@router.delete("/favorites", summary="取消收藏论文", dependencies=[Security(check_permissions)])
+async def remove_favorite(
+    arxiv_id: str = Query(..., description="论文ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    取消收藏论文
+    :param arxiv_id: 外部论文ID
+    :param current_user: 当前用户信息
+    """
+    user_id = current_user["user_id"]
+
+    # 检查是否存在收藏记录
+    favorite = await PaperFavorite.get_or_none(user_id=user_id, arxiv_id=arxiv_id)
+    if not favorite:
+        raise HTTPException(status_code=404, detail="收藏记录不存在")
+
+    # 删除收藏记录
+    await favorite.delete()
+    return success(msg="论文收藏已取消")
+
+
+@router.get("/favorites", summary="获取收藏论文列表", dependencies=[Security(check_permissions)])
+async def get_favorites(
+    current_user: dict = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=50, description="每页条数"),
+    offset: int = Query(0, ge=0, description="偏移量")
+):
+    """
+    获取用户收藏的论文列表
+    :param current_user: 当前用户信息
+    :param limit: 每页条数
+    :param offset: 偏移量
+    """
+    user_id = current_user["user_id"]
+    favorites = await PaperFavorite.filter(user_id=user_id).offset(offset).limit(limit)
+
+    # 从数据库获取论文详细信息
+    result = []
+    for favorite in favorites:
+        paper = await Arxiv.get_or_none(arxiv_id=favorite.arxiv_id)
+        if paper:
+            result.append({
+                "arxiv_id": paper.arxiv_id,
+                "title": paper.title,
+                "authors": paper.authors,
+                "published_date": paper.date,
+                "source": paper.pdf_url,
+                "tags": paper.primary_subject,
+            })
+
+    return success(msg="收藏论文列表获取成功", data=result)
+
+
+@router.post("/annotations", summary="添加论文标注", dependencies=[Security(check_permissions)])
+async def create_annotation(
+    arxiv_id: str,
+    content: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    添加论文标注
+    :param arxiv_id: 论文ID
+    :param content: 标注内容
+    :param current_user: 当前登录用户
+    """
+    user_id = current_user["user_id"]
+
+    # 检查是否已经标注过
+    existing_annotation = await PaperAnnotation.get_or_none(user_id=user_id, arxiv_id=arxiv_id)
+    if existing_annotation:
+        raise HTTPException(status_code=404, detail="该论文已标注")
+
+    # 创建标注
+    await PaperAnnotation.create(user_id=user_id, arxiv_id=arxiv_id, content=content)
+    return success(msg="标注创建成功")
+
+
+@router.put("/annotations/{annotation_id}", summary="修改论文标注", dependencies=[Security(check_permissions)])
+async def update_annotation(
+    annotation_id: int,
+    content: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    修改论文标注
+    :param annotation_id: 标注ID
+    :param content: 新的标注内容
+    :param current_user: 当前登录用户
+    """
+    user_id = current_user["user_id"]
+
+    # 获取标注
+    annotation = await PaperAnnotation.get_or_none(id=annotation_id, user_id=user_id)
+    if not annotation:
+        raise HTTPException(status_code=404, detail="标注不存在或无权限修改")
+
+    # 更新标注
+    if content:
+        annotation.content = content
+
+    await annotation.save()
+
+    return success(msg="标注更新成功", data={
+        "id": annotation.id,
+        "content": annotation.content,
+        "update_time": annotation.update_time,
+    })
+
+
+@router.delete("/annotations/{annotation_id}", summary="删除论文标注", dependencies=[Security(check_permissions)])
+async def delete_annotation(annotation_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    删除论文标注
+    :param annotation_id: 标注ID
+    :param current_user: 当前登录用户
+    """
+    user_id = current_user["user_id"]
+
+    # 获取标注
+    annotation = await PaperAnnotation.get_or_none(id=annotation_id, user_id=user_id)
+    if not annotation:
+        raise HTTPException(status_code=404, detail="标注不存在或无权限删除")
+
+    # 删除标注
+    await annotation.delete()
+    return success(msg="标注删除成功")
+
+
+@router.get("/annotations/{paper_id}", summary="获取论文标注", dependencies=[Security(check_permissions)])
+async def get_annotations(paper_id: str):
+    """
+    获取论文标注
+    :param paper_id: 论文ID
+    """
+    annotations = await PaperAnnotation.filter(arxiv_id=paper_id).select_related("user").all()
+    if not annotations:
+        raise HTTPException(status_code=404, detail="标注不存在")
+
+    result = []
+    for annotation in annotations:
+        result.append({
+            "id": annotation.id,
+            "content": annotation.content,
+            "create_time": annotation.create_time,
+        })
+
+    return success(msg="标注获取成功", data=result)

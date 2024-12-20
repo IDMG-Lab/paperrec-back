@@ -243,28 +243,45 @@ async def user_info(req: Request):
     获取当前登陆用户信息
     :return:
     """
-    user_data = await User.get_or_none(pk=req.state.user_id)
+    # 获取当前用户数据
+    user_data = await User.get_or_none(pk=req.state.user_id).prefetch_related("tag")
     if not user_data:
-        return fail(msg=f"用户ID{req.state.user_id}不存在!")
-    # 非超级管理员
+        return fail(msg=f"用户ID {req.state.user_id} 不存在!")
+
+    # 非超级管理员时获取用户权限
     access = []
     if not req.state.user_type:
         # 二级菜单权限
-        two_level_access = await Access.filter(role__user__id=req.state.user_id, is_check=True).values_list("parent_id")
-        two_level_access = [i[0] for i in two_level_access]
+        two_level_access = await Access.filter(
+            role__user__id=req.state.user_id, is_check=True
+        ).values_list("parent_id", flat=True)
         # 一级菜单权限
-        one_level_access = await Access.filter(id__in=list(set(two_level_access))).values_list("parent_id")
-        one_level_access = [i[0] for i in one_level_access]
+        one_level_access = await Access.filter(
+            id__in=list(set(two_level_access))
+        ).values_list("parent_id", flat=True)
 
-        query_access = await Access.filter(id__in=list(set(one_level_access + two_level_access))).values_list("scopes")
-        access = [i[0] for i in query_access]
-    # 处理手机号 ****
+        query_access = await Access.filter(
+            id__in=list(set(one_level_access + two_level_access))
+        ).values_list("scopes", flat=True)
+        access = list(query_access)
+
+    # 处理手机号显示（隐藏中间4位）
     if user_data.user_phone:
-        user_data.user_phone = user_data.user_phone.replace(user_data.user_phone[3:7], "****")
-    # 将作用域加入到用户信息中
-    user_data.__setattr__("scopes", access)
+        user_data.user_phone = user_data.user_phone.replace(
+            user_data.user_phone[3:7], "****"
+        )
 
-    return success(msg="用户信息", data=user_data.__dict__)
+    # 获取用户选择的标签
+    tags = [{"id": tag.id, "name": tag.name, "popularity": tag.popularity} for tag in user_data.tag]
+
+    # 将作用域和标签信息加入到用户信息中
+    user_data.__setattr__("scopes", access)
+    user_data.__setattr__("tags", tags)
+
+    return success(
+        msg="用户信息",
+        data=user_data.__dict__,
+    )
 
 
 @router.post("/account/login", response_model=user.UserLogin, summary="用户登陆")
