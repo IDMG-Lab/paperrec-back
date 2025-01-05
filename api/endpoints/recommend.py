@@ -16,7 +16,7 @@ from models.scrape import Arxiv
 router = APIRouter(prefix="/personalized")
 
 
-@router.get("/search", summary="搜索论文", response_model=List[PaperBase])
+@router.get("/search", summary="搜索论文")
 async def search_arxiv_papers(
     query: str = Query(..., description="用户输入的搜索内容"),
     limit: int = Query(10, ge=1, le=100, description="每页数量"),
@@ -27,33 +27,45 @@ async def search_arxiv_papers(
     :param query: 用户输入的搜索关键词或内容
     :param limit: 每页数量
     :param offset: 偏移量
-    :return: 搜索结果
+    :return: 搜索结果和总条目数
     """
-    # 搜索标题、摘要、作者和分类
-    papers = await Arxiv.filter(
+    # 搜索条件
+    search_condition = (
         Q(title__icontains=query) |
         Q(abstract__icontains=query) |
         Q(authors__icontains=query) |
         Q(primary_subject__icontains=query) |
         Q(subjects__icontains=query)
-    ).order_by("-date").offset(offset).limit(limit)
+    )
+
+    # 获取总条目数
+    total_count = await Arxiv.filter(search_condition).count()
+
+    # 获取当前页数据
+    papers = await Arxiv.filter(search_condition).order_by("-date").offset(offset).limit(limit)
 
     # 如果没有找到相关论文
     if not papers:
         raise HTTPException(status_code=404, detail="没有找到相关论文")
 
-    return [
-        PaperBase(
-            id=paper.arxiv_id,
-            title=paper.title,
-            authors=paper.authors,
-            abstract=paper.abstract,
-            published_date=paper.date,
-            source=paper.pdf_url,
-            tags=paper.primary_subject,
-        )
-        for paper in papers
-    ]
+    # 构造返回数据
+    result = {
+        "total_count": total_count,
+        "papers": [
+            {
+                "id": paper.arxiv_id,
+                "title": paper.title,
+                "authors": paper.authors,
+                "abstract": paper.abstract,
+                "published_date": paper.date,
+                "source": paper.pdf_url,
+                "tags": paper.primary_subject,
+            }
+            for paper in papers
+        ],
+    }
+
+    return success(msg="搜索成功", data=result)
 
 
 @router.get("/recommendations",
@@ -425,20 +437,19 @@ async def create_annotation(
     """
     user_id = current_user["user_id"]
 
-    # 检查是否已经标注过
-    existing_annotation = await PaperAnnotation.get_or_none(user_id=user_id, arxiv_id=arxiv_id)
-    if existing_annotation:
-        raise HTTPException(status_code=404, detail="该论文已标注")
-
-    # 创建标注
-    await PaperAnnotation.create(user_id=user_id, arxiv_id=arxiv_id, content=content)
-    return success(msg="标注创建成功")
+    # 创建新的标注
+    annotation = await PaperAnnotation.create(user_id=user_id, arxiv_id=arxiv_id, content=content)
+    return success(msg="标注创建成功", data={
+        "id": annotation.id,
+        "content": annotation.content,
+        "create_time": annotation.create_time,
+    })
 
 
 @router.put("/annotations/{annotation_id}", summary="修改论文标注", dependencies=[Security(check_permissions)])
 async def update_annotation(
     annotation_id: int,
-    content: Optional[str] = None,
+    content: str,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -455,9 +466,7 @@ async def update_annotation(
         raise HTTPException(status_code=404, detail="标注不存在或无权限修改")
 
     # 更新标注
-    if content:
-        annotation.content = content
-
+    annotation.content = content
     await annotation.save()
 
     return success(msg="标注更新成功", data={
@@ -492,6 +501,7 @@ async def get_annotations(paper_id: str):
     获取论文标注
     :param paper_id: 论文ID
     """
+    # 查询标注信息并关联用户表
     annotations = await PaperAnnotation.filter(arxiv_id=paper_id).select_related("user").all()
     if not annotations:
         raise HTTPException(status_code=404, detail="标注不存在")
@@ -502,6 +512,10 @@ async def get_annotations(paper_id: str):
             "id": annotation.id,
             "content": annotation.content,
             "create_time": annotation.create_time,
+            "user": {
+                "username": annotation.user.username,  # 用户名
+                "nickname": annotation.user.nickname,  # 昵称
+            },
         })
 
     return success(msg="标注获取成功", data=result)

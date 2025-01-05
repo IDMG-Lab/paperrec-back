@@ -15,7 +15,7 @@ class TagBase(BaseModel):
 
 
 class PaperBase(BaseModel):
-    id: float
+    id: str
     title: str = Field(..., max_length=255, description="论文标题")
     abstract: Optional[str] = Field(None, description="论文摘要")
     authors: Optional[str] = Field(None, description="作者列表")
@@ -31,7 +31,7 @@ class UserProfileSchema(BaseModel):
 
 
 class UserActionBase(BaseModel):
-    paper_id: int = Field(..., description="论文ID")
+    paper_id: str = Field(..., description="论文ID")
     action_type: str = Field(..., description="用户行为类型（view/like/favorite等）")
     action_value: float = Field(..., description="行为权重")
     extra_data: Optional[Dict[str, Any]] = Field(None, description="额外信息，例如设备类型或行为来源")
@@ -41,7 +41,7 @@ class UserActionBase(BaseModel):
 class RecommendationBase(BaseModel):
     id: int
     user_id: int = Field(..., description="用户ID")
-    paper_id: int = Field(..., description="论文ID")
+    paper_id: str = Field(..., description="论文ID")
     reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
     recommendation_type: Optional[str] = Field(
         "content_based",
@@ -53,7 +53,7 @@ class RecommendationBase(BaseModel):
 
 class CreateRecommendation(BaseModel):
     user_id: int = Field(..., description="用户ID")
-    paper_id: int = Field(..., description="论文ID")
+    paper_id: str = Field(..., description="论文ID")
     reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
     recommendation_type: Optional[str] = Field(
         "content_based",
