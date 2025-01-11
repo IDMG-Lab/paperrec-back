@@ -5,7 +5,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
-from schemas.base import ResAntTable
 
 
 class TagBase(BaseModel):
@@ -24,79 +23,36 @@ class PaperBase(BaseModel):
     tags: Optional[str] = Field(None, description="关联标签")
 
 
-class UserProfileSchema(BaseModel):
-    user_id: int
-    preferences: Dict[str, Any] = Field(..., description="用户偏好画像，例如标签分布")
-    last_updated: datetime = Field(..., description="最后更新时间")
-
-
 class UserActionBase(BaseModel):
-    paper_id: str = Field(..., description="论文ID")
-    action_type: str = Field(..., description="用户行为类型（view/like/favorite等）")
-    action_value: float = Field(..., description="行为权重")
-    extra_data: Optional[Dict[str, Any]] = Field(None, description="额外信息，例如设备类型或行为来源")
-    create_time: datetime = Field(..., description="行为发生时间")
-
-
-class RecommendationBase(BaseModel):
-    id: int
     user_id: int = Field(..., description="用户ID")
-    paper_id: str = Field(..., description="论文ID")
-    reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
-    recommendation_type: Optional[str] = Field(
-        "content_based",
-        description="推荐类型（content_based/collaborative/hybrid）"
-    )
-    tags: Optional[List[TagBase]] = Field(None, description="推荐关联标签")
-    algorithm_details: Optional[Dict[str, Any]] = Field(None, description="推荐算法的详细信息，例如使用的参数、得分等")
-
-
-class CreateRecommendation(BaseModel):
-    user_id: int = Field(..., description="用户ID")
-    paper_id: str = Field(..., description="论文ID")
-    reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
-    recommendation_type: Optional[str] = Field(
-        "content_based",
-        description="推荐类型（content_based/collaborative/hybrid）"
-    )
-    tag_ids: Optional[List[int]] = Field(None, description="推荐标签ID列表")
-
-
-class UpdateRecommendation(BaseModel):
-    reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
-    recommendation_type: Optional[str] = Field(
-        None,
-        description="推荐类型（content_based/collaborative/hybrid）"
-    )
-    tag_ids: Optional[List[int]] = Field(None, description="推荐标签ID列表")
-
-
-class RecommendationResponse(BaseModel):
-    id: int
-    user_id: Optional[int] = Field(None, description="用户ID")
-    paper: PaperBase = Field(..., description="推荐论文详情")
-    reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
-    recommendation_type: Optional[str] = Field(
-        None,
-        description="推荐类型（content_based/collaborative/hybrid）"
-    )
-    tags: Optional[List[TagBase]] = Field(None, description="推荐关联标签")
-    algorithm_details: Optional[Dict[str, Any]] = Field(
-        None, description="推荐算法的详细信息，例如得分"
-    )
-    create_time: datetime = Field(..., description="创建时间")
-    update_time: datetime = Field(..., description="更新时间")
-
-
-class RecommendationTable(ResAntTable):
-    records: List[RecommendationResponse] = Field(..., description="推荐记录列表")
-
-
-class UserActionTable(ResAntTable):
-    records: List[UserActionBase] = Field(..., description="用户行为记录列表")
+    arxiv_id: str = Field(..., max_length=100, description="外部论文唯一标识符")
+    action_type: str = Field(..., max_length=50,description="行为类型，比如click（点击）、view（浏览）、search（搜索）、favorite（收藏）等")
+    action_value: float = Field(1.0, description="行为权重，用户行为对推荐的重要程度")
+    session_id: Optional[str] = Field(None, max_length=255, description="用户会话ID，便于关联用户连续行为")
+    ip_address: Optional[str] = Field(None, max_length=45, description="用户IP地址")
+    device_type: Optional[str] = Field(None, max_length=50, description="设备类型，比如 PC、Mobile")
+    location: Optional[Dict] = Field(None, description="用户地理位置信息，比如国家、省、市")
+    extra_data: Optional[Dict] = Field(None, description="额外信息，比如搜索关键词、停留时间等")
 
 
 class UserProfileResponse(BaseModel):
-    user_id: int
-    preferences: Dict[str, Any] = Field(..., description="用户偏好画像")
-    last_updated: datetime = Field(..., description="最后更新时间")
+    user_id: int = Field(..., description="用户ID")
+    preferences: Dict = Field(..., description="用户偏好，比如感兴趣的标签分布")
+    activity_score: float = Field(0.0, description="用户活跃度分数")
+    tags: Optional[Dict] = Field(None, description="用户标签，比如领域、主题等")
+
+
+class RecommendationBase(BaseModel):
+    user_id: int = Field(..., description="用户ID")
+    arxiv_id: str = Field(..., max_length=100, description="外部论文唯一标识符")
+    reason: Optional[str] = Field(None, max_length=255, description="推荐理由")
+    recommendation_type: str = Field("content_based",max_length=50,description="推荐类型 content_based/collaborative/hybrid")
+    status: str = Field("pending",max_length=50,description="推荐状态 pending/viewed/accepted/ignored")
+    priority: int = Field(0, description="推荐优先级，用于排序推荐结果")
+    extra_data: Optional[Dict] = Field(None, description="额外信息，如推荐模型参数或调试信息")
+    tags: Optional[List[str]] = Field(None, description="推荐相关的标签列表")
+
+
+class RecommendationResponse(BaseModel):
+    user_id: Optional[int] = Field(None, description="用户ID")
+    paper: PaperBase = Field(..., description="推荐论文详情")

@@ -87,22 +87,27 @@ class Tag(TimestampMixin):
 class UserAction(TimestampMixin):
     user: fields.ForeignKeyRelation[User] = \
         fields.ForeignKeyField("arxivdb.User", related_name="actions", on_delete=fields.CASCADE)
-    paper: fields.ForeignKeyRelation[Paper] = \
-        fields.ForeignKeyField("arxivdb.Paper", related_name="actions", on_delete=fields.CASCADE)
-    action_type = fields.CharField(max_length=50, description="行为类型，比如view（浏览）、like（点赞）、favorite（收藏）等")
+    arxiv_id = fields.CharField(max_length=100, description="外部论文唯一标识符")
+    action_type = fields.CharField(max_length=50, description="行为类型，比如click（点击）、view（浏览）、search（搜索）、favorite（收藏）等")
     action_value = fields.FloatField(default=1.0, description="行为权重，用户行为对推荐的重要程度")
-    extra_data = fields.JSONField(null=True, description="额外信息，比如行为来源、设备类型等")
+    session_id = fields.CharField(max_length=255, null=True, description="用户会话ID，便于关联用户连续行为")
+    ip_address = fields.CharField(max_length=45, null=True, description="用户IP地址")
+    device_type = fields.CharField(max_length=50, null=True, description="设备类型，比如 PC、Mobile")
+    location = fields.JSONField(null=True, description="用户地理位置信息，比如国家、省、市")
+    extra_data = fields.JSONField(null=True, description="额外信息，比如搜索关键词、停留时间等")
 
     class Meta:
         table_description = "用户行为记录表"
         table = "user_action"
+        unique_together = [("user", "arxiv_id", "action_type", "create_time")]
 
 
 class UserProfile(TimestampMixin):
     user: fields.OneToOneRelation[User] = \
         fields.OneToOneField("arxivdb.User", related_name="profile", on_delete=fields.CASCADE)
     preferences = fields.JSONField(description="用户偏好，比如感兴趣的标签分布")
-    last_updated = fields.DatetimeField(auto_now=True, description="最后更新时间")
+    activity_score = fields.FloatField(default=0.0, description="用户活跃度分数")
+    tags = fields.JSONField(null=True, description="用户标签，比如领域、主题等")
 
     class Meta:
         table_description = "用户偏好画像表"
@@ -114,38 +119,25 @@ class Recommendation(TimestampMixin):
         fields.ManyToManyField("arxivdb.Tag", related_name="recommendation", on_delete=fields.CASCADE)
     user: fields.ForeignKeyRelation[User] = \
         fields.ForeignKeyField("arxivdb.User", related_name="recommendation", on_delete=fields.CASCADE)
-    paper: fields.ForeignKeyRelation[Paper] = \
-        fields.ForeignKeyField("arxivdb.Paper", related_name="recommendation", on_delete=fields.CASCADE)
+    arxiv_id = fields.CharField(max_length=100, description="外部论文唯一标识符")
     reason = fields.CharField(max_length=255, null=True, description="推荐理由")
     recommendation_type = fields.CharField(
-        max_length=50, default="content_based", description="推荐类型 content_based/collaborative/hybrid"
+        max_length=50,
+        default="content_based",
+        description="推荐类型 content_based/collaborative/hybrid"
     )
+    status = fields.CharField(
+        max_length=50,
+        default="pending",
+        description="推荐状态 pending/viewed/accepted/ignored"
+    )
+    priority = fields.IntField(default=0,description="推荐优先级，用于排序推荐结果")
+    extra_data = fields.JSONField(null=True,description="额外信息，如推荐模型参数或调试信息")
 
     class Meta:
         table_description = "推荐记录表"
         table = "recommendation"
-
-
-class RecommendationParams(TimestampMixin):
-    algorithm = fields.CharField(max_length=50, description="算法名称，例如content_based/collaborative/hybrid")
-    params = fields.JSONField(description="算法的参数配置，例如权重、阈值等")
-    description = fields.TextField(null=True, description="参数说明")
-
-    class Meta:
-        table_description = "推荐算法参数表"
-        table = "recommendation_params"
-
-
-class TagWeight(TimestampMixin):
-    paper: fields.ForeignKeyRelation[Paper] = \
-        fields.ForeignKeyField("arxivdb.Paper", related_name="tag_weights", on_delete=fields.CASCADE)
-    tag: fields.ForeignKeyRelation[Tag] = \
-        fields.ForeignKeyField("arxivdb.Tag", related_name="tag_weights", on_delete=fields.CASCADE)
-    weight = fields.FloatField(description="权重值，用于表示该标签与论文的相关性")
-
-    class Meta:
-        table_description = "标签权重表"
-        table = "tag_weight"
+        unique_together = [("user", "arxiv_id", "recommendation_type")]
 
 
 class PaperAnnotation(TimestampMixin):
@@ -178,19 +170,6 @@ class PaperFavorite(TimestampMixin):
     class Meta:
         table_description = "论文收藏表"
         table = "paper_favorite"
-
-
-class RecommendationLog(TimestampMixin):
-    user: fields.ForeignKeyRelation["User"] = \
-        fields.ForeignKeyField("arxivdb.User", related_name="recommendation_logs", on_delete=fields.CASCADE)
-    recommendation: fields.ForeignKeyRelation["Recommendation"] = \
-        fields.ForeignKeyField("arxivdb.Recommendation", related_name="logs", on_delete=fields.CASCADE)
-    interaction = fields.CharField(max_length=50, description="用户交互行为，例如click（点击）、ignore（忽略）")
-    timestamp = fields.DatetimeField(auto_now_add=True, description="行为时间")
-
-    class Meta:
-        table_description = "推荐日志表"
-        table = "recommendation_log"
 
 
 class LearningPath(TimestampMixin):

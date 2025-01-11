@@ -10,7 +10,7 @@ from tortoise.expressions import Q
 from core.Auth import get_current_user, check_permissions
 from core.Response import success
 from schemas.recommend import RecommendationResponse, UserProfileResponse, UserActionBase, PaperBase
-from models.arxivdb import Paper, UserAction, UserProfile, Tag, PaperFavorite, PaperAnnotation
+from models.arxivdb import Paper, UserAction, UserProfile, Tag, PaperFavorite, PaperAnnotation, Recommendation
 from models.scrape import Arxiv
 
 router = APIRouter(prefix="/personalized")
@@ -119,11 +119,21 @@ async def get_personalized_recommendations(
 
     # 构建推荐列表
     recommendations = []
-    current_id = 1
 
     for paper in papers:
+        # 保存推荐记录到数据库
+        await Recommendation.create(
+            user_id=user_id,
+            arxiv_id=paper.arxiv_id,
+            reason=f"推荐标签: {tag_name}",
+            recommendation_type="tag_based",  # 推荐类型
+            status="pending",  # 初始状态
+            priority=0,  # 推荐优先级
+            extra_data={"source": paper.pdf_url, "tags": paper.primary_subject},
+        )
+
+        # 构建响应对象
         recommendation = RecommendationResponse(
-            id=current_id,
             user_id=user_id,
             paper={
                 "id": paper.arxiv_id,
@@ -134,16 +144,82 @@ async def get_personalized_recommendations(
                 "source": paper.pdf_url,
                 "tags": paper.primary_subject,
             },
-            reason="匹配您的兴趣标签",
-            recommendation_type="content_based",
-            tags=None,
-            algorithm_details=None,
-            create_time=datetime.now(),
-            update_time=datetime.now(),
         )
         recommendations.append(recommendation)
-        current_id += 1
+
     return recommendations
+
+
+@router.get("/user/recommendations",
+            summary="获取用户历史推荐列表",
+            dependencies=[Security(check_permissions)]
+            )
+async def get_user_recommendations(
+    current_user: dict = Depends(get_current_user),
+    start_time: Optional[datetime] = Query(None, description="起始时间"),
+    end_time: Optional[datetime] = Query(None, description="结束时间"),
+    recommendation_type: Optional[str] = Query(None, description="推荐类型（如content_based、collaborative）"),
+    status: Optional[str] = Query(None, description="推荐状态（如pending、viewed、accepted、ignored）"),
+    page: int = Query(1, ge=1, description="页码，默认第 1 页"),
+    page_size: int = Query(10, ge=1, le=100, description="每页条数，默认 10 条"),
+):
+    """
+    获取用户历史推荐列表
+    :param current_user: 当前登录用户信息
+    :param start_time: 推荐记录的起始时间
+    :param end_time: 推荐记录的结束时间
+    :param recommendation_type: 推荐类型过滤条件
+    :param status: 推荐状态过滤条件
+    :param page: 页码
+    :param page_size: 每页条数
+    """
+    user_id = current_user["user_id"]
+
+    # 构建查询条件
+    query = Q(user_id=user_id)
+    if start_time:
+        query &= Q(create_time__gte=start_time)
+    if end_time:
+        query &= Q(create_time__lte=end_time)
+    if recommendation_type:
+        query &= Q(recommendation_type=recommendation_type)
+    if status:
+        query &= Q(status=status)
+
+    # 获取分页数据
+    total_count = await Recommendation.filter(query).count()
+    recommendations = (
+        await Recommendation.filter(query)
+        .order_by("-create_time")
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+
+    if not recommendations:
+        raise HTTPException(status_code=404, detail="用户历史推荐记录未找到")
+
+    # 格式化返回结果
+    recommendations_data = [
+        {
+            "arxiv_id": recommendation.arxiv_id,
+            "reason": recommendation.reason,
+            "recommendation_type": recommendation.recommendation_type,
+            "status": recommendation.status,
+            "priority": recommendation.priority,
+            "extra_data": recommendation.extra_data,
+            "create_time": recommendation.create_time,
+        }
+        for recommendation in recommendations
+    ]
+
+    return success(
+        data={
+            "total_count": total_count,
+            "page": page,
+            "page_size": page_size,
+            "recommendations": recommendations_data,
+        }
+    )
 
 
 @router.post("/user/actions", summary="记录用户行为", dependencies=[Security(check_permissions)])
@@ -154,16 +230,22 @@ async def record_user_action(action: UserActionBase, current_user: dict = Depend
     :param action: 用户行为数据
     """
     user_id = current_user["user_id"]
+
+    # 在用户行为表中记录行为数据
     await UserAction.create(
         user_id=user_id,
-        paper_id=action.paper_id,
+        arxiv_id=action.arxiv_id,
         action_type=action.action_type,
         action_value=action.action_value,
-        extra_data=action.extra_data,
-        create_time=datetime.now(),
+        session_id=action.session_id,
+        ip_address=action.ip_address,
+        device_type=action.device_type,
+        location=action.location,
+        extra_data=action.extra_data,  # 保存额外数据
     )
+
     # 基于行为更新用户画像
-    await update_user_profile(action, user_id)
+    # await update_user_profile(action, user_id)
 
     return success(msg="行为记录成功")
 
@@ -173,7 +255,7 @@ async def get_user_actions(
     current_user: dict = Depends(get_current_user),
     start_time: Optional[datetime] = Query(None, description="起始时间"),
     end_time: Optional[datetime] = Query(None, description="结束时间"),
-    action_type: Optional[str] = Query(None, description="行为类型（如浏览、收藏、点赞）"),
+    action_type: Optional[str] = Query(None, description="行为类型（如浏览、收藏、点赞等）"),
     page: int = Query(1, ge=1, description="页码，默认第 1 页"),
     page_size: int = Query(10, ge=1, le=100, description="每页条数，默认 10 条"),
 ):
@@ -197,8 +279,10 @@ async def get_user_actions(
     if action_type:
         query &= Q(action_type=action_type)
 
-    # 获取分页数据
+    # 获取总记录数
     total_count = await UserAction.filter(query).count()
+
+    # 查询用户行为数据并分页
     actions = (
         await UserAction.filter(query)
         .order_by("-create_time")
@@ -211,16 +295,20 @@ async def get_user_actions(
 
     # 格式化返回结果
     actions_data = [
-        UserActionBase(
-            paper_id=action.paper_id,
-            action_type=action.action_type,
-            action_value=action.action_value,
-            extra_data=action.extra_data,
-            create_time=action.create_time,
-        )
+        {
+            "arxiv_id": action.arxiv_id,
+            "action_type": action.action_type,
+            "action_value": action.action_value,
+            "session_id": action.session_id,
+            "ip_address": action.ip_address,
+            "device_type": action.device_type,
+            "location": action.location,
+            "extra_data": action.extra_data,
+        }
         for action in actions
     ]
 
+    # 返回分页结果
     return success(
         data={
             "total_count": total_count,
@@ -242,14 +330,20 @@ async def get_user_profile(current_user: dict = Depends(get_current_user)):
     :param current_user: 当前用户信息
     """
     user_id = current_user["user_id"]
+
+    # 获取用户画像数据
     user_profile = await UserProfile.get_or_none(user_id=user_id)
     if not user_profile:
         raise HTTPException(status_code=404, detail="用户画像未找到")
-    return {
-        "user_id": user_profile.user_id,
-        "preferences": user_profile.preferences,
-        "last_updated": user_profile.last_updated.isoformat()
-    }
+
+    # 返回用户画像数据
+    return UserProfileResponse(
+        user_id=user_profile.user_id,
+        preferences=user_profile.preferences,
+        activity_score=user_profile.activity_score,
+        tags=user_profile.tags,
+        last_updated=user_profile.update_time
+    )
 
 
 @router.post("/user/profile",
@@ -319,11 +413,9 @@ async def get_popular_recommendations(limit: int = Query(10, ge=1, le=50, descri
 
     # 构建推荐列表
     recommendations = []
-    current_id = 1
 
     for paper in papers:
         recommendation = RecommendationResponse(
-            id=current_id,
             user_id=None,
             paper={
                 "id": paper.arxiv_id,
@@ -334,15 +426,8 @@ async def get_popular_recommendations(limit: int = Query(10, ge=1, le=50, descri
                 "source": paper.pdf_url,
                 "tags": paper.primary_subject,
             },
-            reason="基于标签表生成的热门推荐",
-            recommendation_type="popular",
-            tags=None,
-            algorithm_details=None,
-            create_time=datetime.now(),
-            update_time=datetime.now(),
         )
         recommendations.append(recommendation)
-        current_id += 1
 
     return recommendations
 
